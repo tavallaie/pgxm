@@ -17,11 +17,7 @@ on:
 jobs:
   build_and_push_c_builders:
     name: 🧱 ${{ matrix.arch }} C on 🐘 ${{ matrix.pg_version }}
-    runs-on:
-      - "runs-on=${{ github.run_id }}-${{ matrix.arch }}-pg${{ matrix.pg_version }}"
-      - "runner=large-${{ matrix.arch }}"
-      - "cpu=8"
-      - "ram=16"
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -58,11 +54,7 @@ jobs:
     needs: build_and_push_c_builders
     if: github.ref_name == 'main'
     name: 🗂️ C on 🐘 ${{ matrix.pg_version }}
-    runs-on:
-      - "runs-on=${{ github.run_id }}-pg${{ matrix.pg_version }}"
-      - "runner=large-amd64"
-      - "cpu=8"
-      - "ram=16"
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         pg_version: ["14", "15", "16", "17"]
@@ -118,11 +110,7 @@ jobs:
   build_and_push_pgrx_builders:
     needs: build_and_push_c_builders
     name: 🦀 ${{ matrix.arch }} pgrx ${{ matrix.pgrx_version }} on 🐘 ${{ matrix.pg_version }}
-    runs-on:
-      - "runs-on=${{ github.run_id }}-${{ matrix.arch }}-pgrx${{ matrix.pgrx_version}}-pg${{ matrix.pg_version }}"
-      - "runner=large-${{ matrix.arch }}"
-      - "cpu=8"
-      - "ram=16"
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -199,11 +187,7 @@ jobs:
     name: 🗂️ pgrx ${{ matrix.pgrx_version }} on 🐘 ${{ matrix.pg_version }}
     if: github.ref_name == 'main'
     needs: build_and_push_pgrx_builders
-    runs-on:
-      - "runs-on=${{ github.run_id }}-pgrx${{ matrix.pgrx_version}}-pg${{ matrix.pg_version }}"
-      - "runner=large-amd64"
-      - "cpu=8"
-      - "ram=16"
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
