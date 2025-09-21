@@ -21,7 +21,7 @@ permissions:
 jobs:
   build_and_push_c_builders:
     name: 🧱 ${{ matrix.arch }} C on 🐘 ${{ matrix.pg_version }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-latest-arm64' || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
@@ -35,17 +35,24 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      - name: Build image
+      - name: Build and push image
         uses: docker/build-push-action@v6
         with:
           context: src/pgxm/images/c-builder
-          push: false
+          push: true
           build-args: PG_VERSION=${{ matrix.pg_version }}
           platforms: linux/${{ matrix.arch }}
           tags: ghcr.io/${{ github.repository_owner }}/pgxm/c-builder:pg${{ matrix.pg_version }}-${{ matrix.arch }}
-          outputs: type=docker,dest=${{ runner.temp }}/image.tar
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -65,7 +72,7 @@ jobs:
     steps:
       - name: Check out the repo
         uses: actions/checkout@v4
-      - name: Login to Docker Hub # required for un-throttled pulls
+      - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -78,87 +85,53 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: c-builder-pg${{ matrix.pg_version }}-*
-          path: ${{ runner.temp }}
-      - name: Load and push artifacts
+      - name: Create and push manifest
         run: |
           set -xe
-          docker load --input ${{ runner.temp }}/c-builder-pg${{ matrix.pg_version }}-amd64/image.tar
-          docker load --input ${{ runner.temp }}/c-builder-pg${{ matrix.pg_version }}-arm64/image.tar
-          docker push ghcr.io/${{ github.repository_owner }}/pgxm/c-builder:pg${{ matrix.pg_version }}-arm64
-          docker push ghcr.io/${{ github.repository_owner }}/pgxm/c-builder:pg${{ matrix.pg_version }}-amd64
-      - name: Create manifest
-        run: |
-          set -xe
-          # Create the manifest
           docker manifest create \
             ghcr.io/${{ github.repository_owner }}/pgxm/c-builder:pg${{ matrix.pg_version }} \
             ghcr.io/${{ github.repository_owner }}/pgxm/c-builder:pg${{ matrix.pg_version }}-amd64 \
             ghcr.io/${{ github.repository_owner }}/pgxm/c-builder:pg${{ matrix.pg_version }}-arm64
-
-          # Annotate the manifest with architecture and OS information
           docker manifest annotate ghcr.io/${{ github.repository_owner }}/pgxm/c-builder:pg${{ matrix.pg_version }} \
             ghcr.io/${{ github.repository_owner }}/pgxm/c-builder:pg${{ matrix.pg_version }}-amd64 \
             --os linux --arch amd64
-
           docker manifest annotate ghcr.io/${{ github.repository_owner }}/pgxm/c-builder:pg${{ matrix.pg_version }} \
             ghcr.io/${{ github.repository_owner }}/pgxm/c-builder:pg${{ matrix.pg_version }}-arm64 \
             --os linux --arch arm64
-
-          # Push the manifest
           docker manifest push ghcr.io/${{ github.repository_owner }}/pgxm/c-builder:pg${{ matrix.pg_version }}
 
   build_and_push_pgrx_builders:
     needs: build_and_push_c_builders
-    name: 🦀 ${{ matrix.arch }} pgrx ${{ matrix.pgrx_version }} on 🐘 ${{ matrix.pg_version }}
-    runs-on: ubuntu-latest
+    name: 🦀 ${{ matrix.arch }} pgrx ${{ matrix.pgrx_versions }} on 🐘 ${{ matrix.pg_version }}
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-latest-arm64' || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
         arch: ["arm64", "amd64"]
         pg_version: ["14", "15", "16", "17"]
-        pgrx_version:
-          - "0.11.0"
-          - "0.11.1"
-          - "0.11.2"
-          - "0.11.3"
-          - "0.11.4"
-          - "0.12.0"
-          - "0.12.1"
-          - "0.12.2"
-          - "0.12.3"
-          - "0.12.4"
-          - "0.12.5"
-          - "0.12.6"
-          - "0.12.7"
-          - "0.12.8"
-          - "0.12.9"
-          - "0.13.0"
-          - "0.13.1"
-          - "0.14.0"
-          - "0.14.1"
+        pgrx_versions:
+          - ["0.11.0", "0.11.1", "0.11.2", "0.11.3", "0.11.4"]
+          - ["0.12.0", "0.12.1", "0.12.2", "0.12.3", "0.12.4", "0.12.5", "0.12.6", "0.12.7", "0.12.8", "0.12.9"]
+          - ["0.13.0", "0.13.1", "0.14.0", "0.14.1"]
         exclude:
-          - { pg_version: "17", pgrx_version: "0.11.0" }
-          - { pg_version: "17", pgrx_version: "0.11.1" }
-          - { pg_version: "17", pgrx_version: "0.11.2" }
-          - { pg_version: "17", pgrx_version: "0.11.3" }
-          - { pg_version: "17", pgrx_version: "0.11.4" }
-          - { pg_version: "17", pgrx_version: "0.12.0" }
-          - { pg_version: "17", pgrx_version: "0.12.1" }
-          - { pg_version: "17", pgrx_version: "0.12.2" }
-          - { pg_version: "17", pgrx_version: "0.12.3" }
-          - { pg_version: "17", pgrx_version: "0.12.4" }
+          - pg_version: "17"
+            pgrx_versions: ["0.11.0", "0.11.1", "0.11.2", "0.11.3", "0.11.4"]
+          - pg_version: "17"
+            pgrx_versions: ["0.12.0", "0.12.1", "0.12.2", "0.12.3", "0.12.4"]
     steps:
       - name: Check out the repo
         uses: actions/checkout@v4
-      - name: Login to Docker Hub # required for un-throttled pulls
+      - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Download c-builder
@@ -168,67 +141,44 @@ jobs:
           path: ${{ runner.temp }}
       - name: Load c-builder
         run: docker load --input ${{ runner.temp }}/c-builder-pg${{ matrix.pg_version }}-${{ matrix.arch }}/image.tar
-      - name: Build image
-        uses: docker/build-push-action@v6
-        with:
-          context: src/pgxm/images/pgrx-builder
-          push: false
-          build-args: |
-            PG_VERSION=${{ matrix.pg_version }}
-            PGRX_VERSION=${{ matrix.pgrx_version }}
-          platforms: linux/${{ matrix.arch }}
-          tags: ghcr.io/${{ github.repository_owner }}/pgxm/pgrx-builder:pg${{ matrix.pg_version }}-pgrx${{ matrix.pgrx_version }}-${{ matrix.arch }}
-          outputs: type=docker,dest=${{ runner.temp }}/image.tar
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          path: ${{ runner.temp }}/image.tar
-          name: pgrx-builder-pg${{ matrix.pg_version }}-pgrx${{ matrix.pgrx_version }}-${{ matrix.arch }}
-          overwrite: true
-          if-no-files-found: error
+      - name: Build and push images for pgrx versions
+        run: |
+          set -xe
+          for version in ${{ join(matrix.pgrx_versions, ' ') }}; do
+            docker buildx build \
+              --platform linux/${{ matrix.arch }} \
+              --build-arg PG_VERSION=${{ matrix.pg_version }} \
+              --build-arg PGRX_VERSION=$version \
+              -t ghcr.io/${{ github.repository_owner }}/pgxm/pgrx-builder:pg${{ matrix.pg_version }}-pgrx$version-${{ matrix.arch }} \
+              --push \
+              --cache-from type=gha \
+              --cache-to type=gha,mode=max \
+              src/pgxm/images/pgrx-builder || echo "Build failed for pgrx $version, continuing..."
+          done
 
   create_and_push_pgrx_manifests:
-    name: 🗂️ pgrx ${{ matrix.pgrx_version }} on 🐘 ${{ matrix.pg_version }}
+    name: 🗂️ pgrx ${{ matrix.pgrx_versions }} on 🐘 ${{ matrix.pg_version }}
     if: github.ref_name == 'main'
     needs: build_and_push_pgrx_builders
     runs-on: ubuntu-latest
+    continue-on-error: true
     strategy:
       fail-fast: false
       matrix:
         pg_version: ["14", "15", "16", "17"]
-        pgrx_version:
-          - "0.11.0"
-          - "0.11.1"
-          - "0.11.2"
-          - "0.11.3"
-          - "0.11.4"
-          - "0.12.0"
-          - "0.12.1"
-          - "0.12.2"
-          - "0.12.3"
-          - "0.12.4"
-          - "0.12.5"
-          - "0.12.6"
-          - "0.12.7"
-          - "0.12.8"
-          - "0.12.9"
-          - "0.13.0"
-          - "0.13.1"
+        pgrx_versions:
+          - ["0.11.0", "0.11.1", "0.11.2", "0.11.3", "0.11.4"]
+          - ["0.12.0", "0.12.1", "0.12.2", "0.12.3", "0.12.4", "0.12.5", "0.12.6", "0.12.7", "0.12.8", "0.12.9"]
+          - ["0.13.0", "0.13.1", "0.14.0", "0.14.1"]
         exclude:
-          - { pg_version: "17", pgrx_version: "0.11.0" }
-          - { pg_version: "17", pgrx_version: "0.11.1" }
-          - { pg_version: "17", pgrx_version: "0.11.2" }
-          - { pg_version: "17", pgrx_version: "0.11.3" }
-          - { pg_version: "17", pgrx_version: "0.11.4" }
-          - { pg_version: "17", pgrx_version: "0.12.0" }
-          - { pg_version: "17", pgrx_version: "0.12.1" }
-          - { pg_version: "17", pgrx_version: "0.12.2" }
-          - { pg_version: "17", pgrx_version: "0.12.3" }
-          - { pg_version: "17", pgrx_version: "0.12.4" }
+          - pg_version: "17"
+            pgrx_versions: ["0.11.0", "0.11.1", "0.11.2", "0.11.3", "0.11.4"]
+          - pg_version: "17"
+            pgrx_versions: ["0.12.0", "0.12.1", "0.12.2", "0.12.3", "0.12.4"]
     steps:
       - name: Check out the repo
         uses: actions/checkout@v4
-      - name: Login to Docker Hub # required for un-throttled pulls
+      - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -241,35 +191,24 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: pgrx-builder-pg${{ matrix.pg_version }}-pgrx${{ matrix.pgrx_version }}-*
-          path: ${{ runner.temp }}
-      - name: Load and push artifacts
+      - name: Create and push manifests
         run: |
           set -xe
-          docker load --input ${{ runner.temp }}/pgrx-builder-pg${{ matrix.pg_version }}-pgrx${{ matrix.pgrx_version }}-amd64/image.tar
-          docker load --input ${{ runner.temp }}/pgrx-builder-pg${{ matrix.pg_version }}-pgrx${{ matrix.pgrx_version }}-arm64/image.tar
-          docker push ghcr.io/${{ github.repository_owner }}/pgxm/pgrx-builder:pg${{ matrix.pg_version }}-pgrx${{ matrix.pgrx_version }}-amd64
-          docker push ghcr.io/${{ github.repository_owner }}/pgxm/pgrx-builder:pg${{ matrix.pg_version }}-pgrx${{ matrix.pgrx_version }}-arm64
-      - name: Create and push manifest
-        run: |
-          set -xe
-          # Create the manifest
-          docker manifest create \
-            ghcr.io/${{ github.repository_owner }}/pgxm/pgrx-builder:pg${{ matrix.pg_version }}-pgrx${{ matrix.pgrx_version }} \
-            --amend ghcr.io/${{ github.repository_owner }}/pgxm/pgrx-builder:pg${{ matrix.pg_version }}-pgrx${{ matrix.pgrx_version }}-amd64 \
-            --amend ghcr.io/${{ github.repository_owner }}/pgxm/pgrx-builder:pg${{ matrix.pg_version }}-pgrx${{ matrix.pgrx_version }}-arm64
-
-          # Annotate the manifest with architecture and OS information
-          docker manifest annotate ghcr.io/${{ github.repository_owner }}/pgxm/pgrx-builder:pg${{ matrix.pg_version }}-pgrx${{ matrix.pgrx_version }} \
-            ghcr.io/${{ github.repository_owner }}/pgxm/pgrx-builder:pg${{ matrix.pg_version }}-pgrx${{ matrix.pgrx_version }}-amd64 \
-            --os linux --arch amd64
-
-          docker manifest annotate ghcr.io/${{ github.repository_owner }}/pgxm/pgrx-builder:pg${{ matrix.pg_version }}-pgrx${{ matrix.pgrx_version }} \
-            ghcr.io/${{ github.repository_owner }}/pgxm/pgrx-builder:pg${{ matrix.pg_version }}-pgrx${{ matrix.pgrx_version }}-arm64 \
-            --os linux --arch arm64
-
-          # Push the manifest
-          docker manifest push ghcr.io/${{ github.repository_owner }}/pgxm/pgrx-builder:pg${{ matrix.pg_version }}-pgrx${{ matrix.pgrx_version }}
+          for version in ${{ join(matrix.pgrx_versions, ' ') }}; do
+            if docker manifest inspect ghcr.io/${{ github.repository_owner }}/pgxm/pgrx-builder:pg${{ matrix.pg_version }}-pgrx$version-amd64 >/dev/null 2>&1 && \
+               docker manifest inspect ghcr.io/${{ github.repository_owner }}/pgxm/pgrx-builder:pg${{ matrix.pg_version }}-pgrx$version-arm64 >/dev/null 2>&1; then
+              docker manifest create \
+                ghcr.io/${{ github.repository_owner }}/pgxm/pgrx-builder:pg${{ matrix.pg_version }}-pgrx$version \
+                --amend ghcr.io/${{ github.repository_owner }}/pgxm/pgrx-builder:pg${{ matrix.pg_version }}-pgrx$version-amd64 \
+                --amend ghcr.io/${{ github.repository_owner }}/pgxm/pgrx-builder:pg${{ matrix.pg_version }}-pgrx$version-arm64
+              docker manifest annotate ghcr.io/${{ github.repository_owner }}/pgxm/pgrx-builder:pg${{ matrix.pg_version }}-pgrx$version \
+                ghcr.io/${{ github.repository_owner }}/pgxm/pgrx-builder:pg${{ matrix.pg_version }}-pgrx$version-amd64 \
+                --os linux --arch amd64
+              docker manifest annotate ghcr.io/${{ github.repository_owner }}/pgxm/pgrx-builder:pg${{ matrix.pg_version }}-pgrx$version \
+                ghcr.io/${{ github.repository_owner }}/pgxm/pgrx-builder:pg${{ matrix.pg_version }}-pgrx$version-arm64 \
+                --os linux --arch arm64
+              docker manifest push ghcr.io/${{ github.repository_owner }}/pgxm/pgrx-builder:pg${{ matrix.pg_version }}-pgrx$version
+            else
+              echo "Skipping manifest for pg${{ matrix.pg_version }}-pgrx$version: one or both images missing"
+            fi
+          done

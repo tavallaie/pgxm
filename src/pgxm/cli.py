@@ -1,5 +1,8 @@
-# pgxm/cli.py
+# src/pgxm/cli.py
 import click
+
+# Import the build function from the build module
+from .build import build_extension
 
 
 # --- Main CLI Group ---
@@ -11,7 +14,10 @@ def cli():
 
 
 # --- Build Command ---
-@cli.command()
+# The @cli.command() decorator means the actual CLI command will be 'pgxm build'
+@cli.command(
+    name="build"
+)  # Explicitly set the command name (optional if function name matches)
 @click.option(
     "-p",
     "--path",
@@ -43,7 +49,7 @@ def cli():
     default="15",
     help="PostgreSQL version to build against [default: 15].",
 )
-def build(
+def build(  # This function name is now 'build'
     path,
     output_path,
     version,
@@ -58,30 +64,30 @@ def build(
     pg_version,
 ):
     """Build a PostgreSQL extension."""
-    click.echo("Building extension...")
-    click.echo(f"  Path: {path}")
-    click.echo(f"  Output Path: {output_path}")
-    click.echo(f"  Version: {version}")
-    click.echo(f"  Name: {name}")
-    click.echo(f"  Extension Name: {extension_name}")
-    click.echo(f"  Dependencies: {extension_dependencies}")
-    click.echo(f"  Preload Libraries: {preload_libraries}")
-    click.echo(f"  Platform: {platform}")
-    click.echo(f"  Dockerfile: {dockerfile}")
-    click.echo(f"  Install Command: {install_command}")
-    click.echo(f"  Run Tests: {test}")
-    click.echo(f"  PG Version: {pg_version}")
-
-    # --- TODO: Implement actual build logic here ---
-    # This is where you'd:
-    # 1. Detect extension type (PGRX, C/SQL)
-    # 2. Read control file
-    # 3. Determine final name/version
-    # 4. Set up build environment (Docker?)
-    # 5. Run build command
-    # 6. Collect files
-    # 7. Create archive (.tar.gz)
-    click.echo("Build logic placeholder. Implementation needed.")
+    try:
+        # Call the core build logic from pgxm.build
+        build_extension(
+            path=path,
+            output_path=output_path,
+            version=version,
+            name=name,
+            extension_name=extension_name,
+            extension_dependencies=extension_dependencies,
+            preload_libraries=preload_libraries,
+            platform=platform,
+            dockerfile=dockerfile,
+            install_command=install_command,
+            test=test,
+            pg_version=pg_version,
+        )
+        click.echo("Build completed successfully.")
+    except click.ClickException:
+        # Re-raise ClickExceptions (they handle their own output)
+        raise
+    except Exception as e:
+        # Catch any other unexpected errors and present them nicely
+        click.echo(f"An unexpected error occurred during build: {e}", err=True)
+        raise click.ClickException("Build failed.") from e
 
 
 # --- Publish Command (Placeholder) ---
