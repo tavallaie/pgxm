@@ -21,7 +21,7 @@ permissions:
 jobs:
   build_and_push_c_builders:
     name: 🧱 ${{ matrix.arch }} C on 🐘 ${{ matrix.pg_version }}
-    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-latest-arm64' || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -41,6 +41,10 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Build and push image
@@ -94,7 +98,7 @@ jobs:
   build_and_push_pgrx_builders:
     needs: build_and_push_c_builders
     name: 🦀 ${{ matrix.arch }} pgrx on 🐘 ${{ matrix.pg_version }}
-    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-latest-arm64' || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -123,6 +127,10 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Pull c-builder image
