@@ -41,7 +41,8 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Set up QEMU
+      - name: Set up QEMU (for ARM64)
+        if: matrix.arch == 'arm64'
         uses: docker/setup-qemu-action@v3
         with:
           platforms: arm64
@@ -83,17 +84,10 @@ jobs:
       - name: Create and push manifest
         run: |
           set -xe
-          docker manifest create \
-            ghcr.io/${{ github.repository_owner }}/pgxm/c-builder:pg${{ matrix.pg_version }} \
-            --amend ghcr.io/${{ github.repository_owner }}/pgxm/c-builder:pg${{ matrix.pg_version }}-amd64 \
-            --amend ghcr.io/${{ github.repository_owner }}/pgxm/c-builder:pg${{ matrix.pg_version }}-arm64
-          docker manifest annotate ghcr.io/${{ github.repository_owner }}/pgxm/c-builder:pg${{ matrix.pg_version }} \
+          docker buildx imagetools create \
+            -t ghcr.io/${{ github.repository_owner }}/pgxm/c-builder:pg${{ matrix.pg_version }} \
             ghcr.io/${{ github.repository_owner }}/pgxm/c-builder:pg${{ matrix.pg_version }}-amd64 \
-            --os linux --arch amd64
-          docker manifest annotate ghcr.io/${{ github.repository_owner }}/pgxm/c-builder:pg${{ matrix.pg_version }} \
-            ghcr.io/${{ github.repository_owner }}/pgxm/c-builder:pg${{ matrix.pg_version }}-arm64 \
-            --os linux --arch arm64
-          docker manifest push ghcr.io/${{ github.repository_owner }}/pgxm/c-builder:pg${{ matrix.pg_version }}
+            ghcr.io/${{ github.repository_owner }}/pgxm/c-builder:pg${{ matrix.pg_version }}-arm64
 
   build_and_push_pgrx_builders:
     needs: build_and_push_c_builders
@@ -127,7 +121,8 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Set up QEMU
+      - name: Set up QEMU (for ARM64)
+        if: matrix.arch == 'arm64'
         uses: docker/setup-qemu-action@v3
         with:
           platforms: arm64
@@ -174,7 +169,7 @@ jobs:
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password disadvantaged: ${{ secrets.DOCKERHUB_TOKEN }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -189,17 +184,10 @@ jobs:
           for version in ${{ join(matrix.pgrx_versions, ' ') }}; do
             if docker manifest inspect ghcr.io/${{ github.repository_owner }}/pgxm/pgrx-builder:pg${{ matrix.pg_version }}-pgrx$version-amd64 >/dev/null 2>&1 && \
                docker manifest inspect ghcr.io/${{ github.repository_owner }}/pgxm/pgrx-builder:pg${{ matrix.pg_version }}-pgrx$version-arm64 >/dev/null 2>&1; then
-              docker manifest create \
-                ghcr.io/${{ github.repository_owner }}/pgxm/pgrx-builder:pg${{ matrix.pg_version }}-pgrx$version \
-                --amend ghcr.io/${{ github.repository_owner }}/pgxm/pgrx-builder:pg${{ matrix.pg_version }}-pgrx$version-amd64 \
-                --amend ghcr.io/${{ github.repository_owner }}/pgxm/pgrx-builder:pg${{ matrix.pg_version }}-pgrx$version-arm64
-              docker manifest annotate ghcr.io/${{ github.repository_owner }}/pgxm/pgrx-builder:pg${{ matrix.pg_version }}-pgrx$version \
+              docker buildx imagetools create \
+                -t ghcr.io/${{ github.repository_owner }}/pgxm/pgrx-builder:pg${{ matrix.pg_version }}-pgrx$version \
                 ghcr.io/${{ github.repository_owner }}/pgxm/pgrx-builder:pg${{ matrix.pg_version }}-pgrx$version-amd64 \
-                --os linux --arch amd64
-              docker manifest annotate ghcr.io/${{ github.repository_owner }}/pgxm/pgrx-builder:pg${{ matrix.pg_version }}-pgrx$version \
-                ghcr.io/${{ github.repository_owner }}/pgxm/pgrx-builder:pg${{ matrix.pg_version }}-pgrx$version-arm64 \
-                --os linux --arch arm64
-              docker manifest push ghcr.io/${{ github.repository_owner }}/pgxm/pgrx-builder:pg${{ matrix.pg_version }}-pgrx$version
+                ghcr.io/${{ github.repository_owner }}/pgxm/pgrx-builder:pg${{ matrix.pg_version }}-pgrx$version-arm64
             else
               echo "Skipping manifest for pg${{ matrix.pg_version }}-pgrx$version: one or both images missing"
             fi
