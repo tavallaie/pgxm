@@ -5,13 +5,13 @@ on:
     branches:
       - "main"
     paths:
-      - "cli/images/**"
+      - "src/pgxm/images/**"
       - ".github/workflows/builder-images.yml"
   pull_request:
     branches:
       - "main"
     paths:
-      - "cli/images/**"
+      - "src/pgxm/images/**"
       - ".github/workflows/builder-images.yml"
 
 jobs:
@@ -36,7 +36,7 @@ jobs:
       - name: Build image
         uses: docker/build-push-action@v6
         with:
-          context: cli/images/c-builder
+          context: src/pgxm/images/c-builder
           push: false
           build-args: PG_VERSION=${{ matrix.pg_version }}
           platforms: linux/${{ matrix.arch }}
@@ -167,7 +167,7 @@ jobs:
       - name: Build image
         uses: docker/build-push-action@v6
         with:
-          context: cli/images/pgrx-builder
+          context: src/pgxm/images/pgrx-builder
           push: false
           build-args: |
             PG_VERSION=${{ matrix.pg_version }}
